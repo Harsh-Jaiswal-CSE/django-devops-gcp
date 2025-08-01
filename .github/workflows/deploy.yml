@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:  # Allows manual triggering for testing
+  workflow_dispatch:  # Allows manual trigger from the Actions tab
 
 env:
   REGION: us-central1
@@ -14,25 +14,29 @@ env:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Validate Secrets
+      - name: Validate Required Secrets
         run: |
           set -e
           if [ -z "${{ secrets.GCP_PROJECT }}" ] || [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
-            echo "❌ Required secrets (GCP_PROJECT or GCP_SA_KEY) are missing"
+            echo "❌ Missing GCP_PROJECT or GCP_SA_KEY secret"
             exit 1
           fi
-          echo "✅ Secrets found"
+          echo "✅ Secrets validated"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
       - name: Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v1
         with:
           project_id: ${{ secrets.GCP_PROJECT }}
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
-          export_default_credentials: true
 
       - name: Configure Docker for Artifact Registry
         run: |
@@ -43,7 +47,7 @@ jobs:
         run: |
           set -e
           IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          echo "🔧 Building Docker image: $IMAGE"
+          echo "🔧 Building and pushing image: $IMAGE"
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
@@ -53,19 +57,15 @@ jobs:
           set -e
           echo "🚀 Deploying to GKE using image: $IMAGE"
 
-          # Confirm GCP authentication
-          gcloud auth list
-          gcloud config list project
-
-          # ⚠️ Confirm your GKE cluster zone (e.g. us-central1-a)
+          # Authenticate with the GKE cluster
           gcloud container clusters get-credentials django-celery-minimal \
-            --zone us-central1-a \
+            --zone us-central1-c \  
             --project ${{ secrets.GCP_PROJECT }}
 
-          # Confirm kubectl is authenticated
+          # Verify connection to cluster
           kubectl cluster-info
           kubectl get nodes
 
-          # Deploy image
+          # Deploy the updated image to the Django web deployment
           kubectl set image deployment/django-web django-web=$IMAGE
           kubectl rollout status deployment/django-web
