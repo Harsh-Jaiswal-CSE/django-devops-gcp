@@ -1,5 +1,4 @@
 name: CI/CD to GKE
-
 on:
   push:
     branches:
@@ -29,33 +28,28 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
-      - name: 🔍 Debug: Check Dockerfile presence and content
+      - name: Debug - Check Dockerfile presence and content
         run: |
           echo "Working directory: $(pwd)"
           ls -la
           echo "--- Dockerfile content ---"
-          cat Dockerfile || echo "❌ Dockerfile not found or empty"
+          cat Dockerfile || echo "Dockerfile not found or empty"
 
       - name: Build and Push Docker Image
         run: |
           set -e
           IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          echo "🔧 Building Docker image: $IMAGE"
+          echo "Building Docker image: $IMAGE"
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
       - name: Deploy to GKE
         run: |
-          # Authenticate and get cluster credentials
           gcloud container clusters get-credentials django-celery-minimal \
             --zone ${{ env.REGION }}-c \
             --project ${{ secrets.GCP_PROJECT }}
-
-          # Verify kubectl access
           kubectl cluster-info
           kubectl get nodes
-
-          # Update deployment image
           kubectl set image deployment/django-web django-web=$IMAGE
           kubectl rollout status deployment/django-web
