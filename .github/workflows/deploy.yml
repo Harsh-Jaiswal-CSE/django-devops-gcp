@@ -1,53 +1,53 @@
+---
 name: CI/CD to GKE
 on:
   push:
-    branches: [ "main" ]
-
+    branches:
+      - main
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT }}
   REGION: us-central1
   REPOSITORY: django-repo
   IMAGE_NAME: django-celery-app
-
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v1
         with:
           project_id: ${{ secrets.GCP_PROJECT }}
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
-
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
-
       - name: Build and Push Docker Image
-        run: |
-          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          docker build -t $IMAGE .
-          docker push $IMAGE
-          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+        run: >
+          IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{
+          env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
 
+          docker build -t $IMAGE .
+
+          docker push $IMAGE
+
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
       - name: Deploy to GKE
         run: |
           # Verify authentication
           gcloud auth list
           gcloud config list project
-          
+
           # Get cluster credentials with explicit project
           gcloud container clusters get-credentials django-celery-minimal \
             --zone ${{ env.REGION }}-c \
             --project ${{ env.PROJECT_ID }}
-          
+
           # Verify kubectl connection
           kubectl cluster-info
           kubectl get nodes
-          
+
           # Deploy with the image
           kubectl set image deployment/django-web django-web=${{ env.IMAGE }}
           kubectl rollout status deployment/django-web
