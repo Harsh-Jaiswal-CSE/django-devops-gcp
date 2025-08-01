@@ -32,9 +32,22 @@ jobs:
       - name: Debug - Check Dockerfile presence and content
         run: |
           echo "Working directory: $(pwd)"
+          echo "=== All files in current directory ==="
           ls -la
-          echo "--- Dockerfile content ---"
-          cat Dockerfile || echo "Dockerfile not found or empty"
+          echo "=== All files recursively ==="
+          find . -name "*ockerfile*" -o -name "*dockerfile*" 2>/dev/null || echo "No Dockerfile found"
+          echo "=== Check if Dockerfile exists specifically ==="
+          if [ -f "Dockerfile" ]; then
+            echo "✅ Dockerfile exists"
+            echo "--- Dockerfile content (first 10 lines) ---"
+            head -10 Dockerfile
+            echo "--- Dockerfile size ---"
+            ls -lh Dockerfile
+          else
+            echo "❌ Dockerfile not found in $(pwd)"
+          fi
+          echo "=== Git status ==="
+          git status
 
       - name: Build and Push Docker Image
         run: |
