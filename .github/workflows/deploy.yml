@@ -35,7 +35,19 @@ jobs:
 
       - name: Deploy to GKE
         run: |
+          # Verify authentication
+          gcloud auth list
+          gcloud config list project
+          
+          # Get cluster credentials with explicit project
           gcloud container clusters get-credentials django-celery-minimal \
             --zone ${{ env.REGION }}-c \
             --project ${{ env.PROJECT_ID }}
+          
+          # Verify kubectl connection
+          kubectl cluster-info
+          kubectl get nodes
+          
+          # Deploy with the image
           kubectl set image deployment/django-web django-web=${{ env.IMAGE }}
+          kubectl rollout status deployment/django-web
