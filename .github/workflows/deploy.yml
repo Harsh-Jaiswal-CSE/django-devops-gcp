@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:  # Allow manual trigger from GitHub UI
+  workflow_dispatch:
 
 env:
   REGION: us-central1
@@ -14,7 +14,6 @@ env:
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -42,7 +41,7 @@ jobs:
         run: |
           gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
-      - name: 🔍 Debug: Check for Dockerfile
+      - name: "🔍 Debug: Check for Dockerfile"
         run: |
           echo "Working directory: $(pwd)"
           echo "--- Files at root ---"
@@ -65,15 +64,12 @@ jobs:
           set -e
           echo "Deploying to GKE using image: $IMAGE"
 
-          # Connect to GKE cluster
           gcloud container clusters get-credentials django-celery-minimal \
-            --zone us-central1-a \  # ⚠️ Replace if different
+            --zone us-central1-a \
             --project ${{ secrets.GCP_PROJECT }}
 
-          # Check connection to Kubernetes cluster
           kubectl cluster-info
           kubectl get nodes
 
-          # Update deployment with new image
           kubectl set image deployment/django-web django-web=$IMAGE
           kubectl rollout status deployment/django-web
