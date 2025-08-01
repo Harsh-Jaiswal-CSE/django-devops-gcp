@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:  # Allows manual trigger from the Actions tab
+  workflow_dispatch:  # Allow manual trigger
 
 env:
   REGION: us-central1
@@ -42,6 +42,19 @@ jobs:
         run: |
           gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
+      - name: Debug: List files to confirm Dockerfile exists
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "--- Listing root files ---"
+          ls -la
+          echo "--- Checking for Dockerfile ---"
+          if [ ! -f Dockerfile ]; then
+            echo "❌ Dockerfile not found in root directory!"
+            exit 1
+          fi
+          echo "✅ Dockerfile found"
+
       - name: Build and Push Docker Image
         id: build
         run: |
@@ -59,10 +72,10 @@ jobs:
 
           # Authenticate with the GKE cluster
           gcloud container clusters get-credentials django-celery-minimal \
-            --zone us-central1-c \  
+            --zone us-central1-a \  # ⚠️ Replace if your cluster is in a different zone
             --project ${{ secrets.GCP_PROJECT }}
 
-          # Verify connection to cluster
+          # Verify Kubernetes cluster access
           kubectl cluster-info
           kubectl get nodes
 
