@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
 
 env:
   REGION: us-central1
@@ -19,7 +19,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Validate Required Secrets
+      - name: ✅ Validate Required Secrets
         run: |
           set -e
           if [ -z "${{ secrets.GCP_PROJECT }}" ] || [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
@@ -28,34 +28,29 @@ jobs:
           fi
           echo "✅ Secrets validated"
 
-      - name: Authenticate to Google Cloud
+      - name: 🔐 Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
-      - name: Set up gcloud CLI
+      - name: ⚙️ Set up gcloud CLI
         uses: google-github-actions/setup-gcloud@v1
         with:
           project_id: ${{ secrets.GCP_PROJECT }}
 
-      - name: Configure Docker for Artifact Registry
+      - name: 🔑 Configure Docker for Artifact Registry
         run: |
           gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
-      - name: Debug: List files to confirm Dockerfile exists
+      - name: 🔍 Debug: Check for Dockerfile
         run: |
-          echo "Current directory:"
-          pwd
-          echo "--- Listing root files ---"
+          echo "Working directory: $(pwd)"
+          echo "--- Files at root ---"
           ls -la
-          echo "--- Checking for Dockerfile ---"
-          if [ ! -f Dockerfile ]; then
-            echo "❌ Dockerfile not found in root directory!"
-            exit 1
-          fi
-          echo "✅ Dockerfile found"
+          echo "--- Recursive search ---"
+          find . -type f | grep -i dockerfile || echo "❌ Dockerfile not found"
 
-      - name: Build and Push Docker Image
+      - name: 🛠️ Build and Push Docker Image
         id: build
         run: |
           set -e
@@ -65,20 +60,20 @@ jobs:
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-      - name: Deploy to GKE
+      - name: 🚀 Deploy to GKE
         run: |
           set -e
-          echo "🚀 Deploying to GKE using image: $IMAGE"
+          echo "Deploying to GKE using image: $IMAGE"
 
-          # Authenticate with the GKE cluster
+          # Connect to GKE cluster
           gcloud container clusters get-credentials django-celery-minimal \
-            --zone us-central1-a \  # ⚠️ Replace if your cluster is in a different zone
+            --zone us-central1-a \  # ⚠️ Replace if different
             --project ${{ secrets.GCP_PROJECT }}
 
-          # Verify Kubernetes cluster access
+          # Check connection to Kubernetes cluster
           kubectl cluster-info
           kubectl get nodes
 
-          # Deploy the updated image to the Django web deployment
+          # Update deployment with new image
           kubectl set image deployment/django-web django-web=$IMAGE
           kubectl rollout status deployment/django-web
