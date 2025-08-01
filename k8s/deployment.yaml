@@ -1,0 +1,194 @@
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-data
+        emptyDir: {}
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  labels:
+    app: redis
+spec:
+  selector:
+    app: redis
+  ports:
+  - name: redis-port
+    port: 6379
+    targetPort: 6379
+    protocol: TCP
+  type: ClusterIP
+
+---
+# Django Web Application Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-web-deployment
+  labels:
+    app: django-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: django-web
+  template:
+    metadata:
+      labels:
+        app: django-web
+    spec:
+      containers:
+      - name: django-web
+        image: gcr.io/devops-467607/django-celery-app:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DJANGO_SETTINGS_MODULE
+          value: "django_celery_project.settings"
+        - name: CELERY_BROKER_URL
+          value: "redis://redis-service:6379/0"
+        - name: DEBUG
+          value: "0"
+        command: ["sh", "-c"]
+        args: ["python manage.py migrate && python manage.py runserver 0.0.0.0:8000"]
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          volumeMounts:
+          - name: gcp-key
+            mountPath: /secrets
+            readOnly: true
+          env:
+           - name: GOOGLE_APPLICATION_CREDENTIALS
+             value: /secrets/gcp-key.json
+
+          volumes:
+          - name: gcp-key
+          secret:
+          secretName: gcp-key
+
+---
+
+# Celery Worker Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker-deployment
+  labels:
+    app: celery-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-worker
+  template:
+    metadata:
+      labels:
+        app: celery-worker
+    spec:
+      containers:
+      - name: celery-worker
+        image: gcr.io/devops-467607/django-celery-app:latest
+        env:
+        - name: DJANGO_SETTINGS_MODULE
+          value: "django_celery_project.settings"
+        - name: CELERY_BROKER_URL
+          value: "redis://redis-service:6379/0"
+        - name: DEBUG
+          value: "0"
+        command: ["celery"]
+        args: ["-A", "django_celery_project", "worker", "--loglevel=info", "--concurrency=2"]
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+---
+# Celery Beat Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-beat-deployment
+  labels:
+    app: celery-beat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-beat
+  template:
+    metadata:
+      labels:
+        app: celery-beat
+    spec:
+      containers:
+      - name: celery-beat
+        image: gcr.io/devops-467607/django-celery-app:latest
+        env:
+        - name: DJANGO_SETTINGS_MODULE
+          value: "django_celery_project.settings"
+        - name: CELERY_BROKER_URL
+          value: "redis://redis-service:6379/0"
+        - name: DEBUG
+          value: "0"
+        command: ["celery"]
+        args: ["-A", "django_celery_project", "beat", "--loglevel=info", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"

@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
+import os
 
 from pathlib import Path
 
@@ -41,6 +42,7 @@ INSTALLED_APPS = [
     'mainapp',
     'django_celery_results',
     'django_celery_beat',
+    'storages',
 ]
 
 MIDDLEWARE = [
@@ -78,8 +80,12 @@ WSGI_APPLICATION = 'django_celery_project.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR/'db.sqlite3',  
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME','django_db'),
+        'USER': os.getenv('DB_USER', 'django_user'),
+        'PASSWORD': os.getenv('DB_PASS', 'Harsh@1234'),
+        'HOST': os.getenv('DB_HOST','127.0.0.1'),
+        'PORT': '5432'  
     }
 }
 
@@ -137,3 +143,10 @@ CELERY_TIMEZONE = 'Asia/Kolkata'
 CELERY_RESULT_BACKEND = 'django-db'
 
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+DEFAULT_FILE_STORAGE = "storage.backends.gcloud.GoogleCloudStorage"
+
+GS_BUCKET_NAME = os.getenv('GS_BUCKET_NAME','django-bucket2025')
+
+
+
