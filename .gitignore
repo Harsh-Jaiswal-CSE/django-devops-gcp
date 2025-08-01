@@ -2,11 +2,6 @@
 .git
 .gitignore
 
-# Docker
-.docker
-# Dockerfile
-.dockerignore
-
 # Python
 __pycache__
 *.pyc
