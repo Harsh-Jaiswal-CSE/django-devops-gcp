@@ -4,7 +4,7 @@
 
 # Docker
 .docker
-Dockerfile
+# Dockerfile
 .dockerignore
 
 # Python
