@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
 
 env:
   REGION: us-central1
@@ -18,58 +17,45 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: ✅ Validate Required Secrets
-        run: |
-          set -e
-          if [ -z "${{ secrets.GCP_PROJECT }}" ] || [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
-            echo "❌ Missing GCP_PROJECT or GCP_SA_KEY secret"
-            exit 1
-          fi
-          echo "✅ Secrets validated"
-
-      - name: 🔐 Authenticate to Google Cloud
+      - name: Set up gcloud
         uses: google-github-actions/auth@v1
         with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: ⚙️ Set up gcloud CLI
-        uses: google-github-actions/setup-gcloud@v1
-        with:
-          project_id: ${{ secrets.GCP_PROJECT }}
-
-      - name: 🔑 Configure Docker for Artifact Registry
+      - name: Set gcloud project
         run: |
-          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+          gcloud config set project ${{ secrets.GCP_PROJECT }}
 
-      - name: "🔍 Debug: Check for Dockerfile"
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+
+      - name: 🔍 Debug: Check Dockerfile presence and content
         run: |
           echo "Working directory: $(pwd)"
-          echo "--- Files at root ---"
           ls -la
-          echo "--- Recursive search ---"
-          find . -type f | grep -i dockerfile || echo "❌ Dockerfile not found"
+          echo "--- Dockerfile content ---"
+          cat Dockerfile || echo "❌ Dockerfile not found or empty"
 
-      - name: 🛠️ Build and Push Docker Image
-        id: build
+      - name: Build and Push Docker Image
         run: |
           set -e
           IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          echo "🔧 Building and pushing image: $IMAGE"
+          echo "🔧 Building Docker image: $IMAGE"
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-      - name: 🚀 Deploy to GKE
+      - name: Deploy to GKE
         run: |
-          set -e
-          echo "Deploying to GKE using image: $IMAGE"
-
+          # Authenticate and get cluster credentials
           gcloud container clusters get-credentials django-celery-minimal \
-            --zone us-central1-a \
+            --zone ${{ env.REGION }}-c \
             --project ${{ secrets.GCP_PROJECT }}
 
+          # Verify kubectl access
           kubectl cluster-info
           kubectl get nodes
 
+          # Update deployment image
           kubectl set image deployment/django-web django-web=$IMAGE
           kubectl rollout status deployment/django-web
