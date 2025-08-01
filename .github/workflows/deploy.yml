@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+      - master
 
 env:
   REGION: us-central1
@@ -40,6 +41,8 @@ jobs:
           set -e
           IMAGE="${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
           echo "Building Docker image: $IMAGE"
+          # If Dockerfile is in a subdirectory, change the path:
+          # docker build -f path/to/Dockerfile -t "$IMAGE" .
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
